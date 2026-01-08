@@ -1,10 +1,11 @@
-let lojas = {};
-let listaLojas = [];
-let lojaAtual = 0;
+let dadosPorLoja = {};
+let lojaSelecionada = "";
 let sorteados = [];
 let sorteiosFeitos = 0;
 
+const selectUnidade = document.getElementById("select-unidade");
 const titulo = document.getElementById("titulo-loja");
+const roleta = document.getElementById("roleta");
 const nomeEl = document.getElementById("nome");
 const numeroEl = document.getElementById("numero");
 const btn = document.getElementById("btnSortear");
@@ -19,79 +20,117 @@ fetch("lista.csv")
 
     linhas.forEach(linha => {
       const [nome, numero, unidade] = linha.split(",");
-      if (!lojas[unidade]) lojas[unidade] = [];
-      lojas[unidade].push({ nome, numero });
+      if (!dadosPorLoja[unidade]) dadosPorLoja[unidade] = [];
+      dadosPorLoja[unidade].push({ nome, numero });
     });
 
-    listaLojas = Object.keys(lojas);
-    iniciarLoja();
+    Object.keys(dadosPorLoja).forEach(unidade => {
+      const option = document.createElement("option");
+      option.value = unidade;
+      option.textContent = unidade;
+      selectUnidade.appendChild(option);
+    });
   });
 
-function iniciarLoja() {
+/* SELEÇÃO DA UNIDADE */
+selectUnidade.addEventListener("change", () => {
+  lojaSelecionada = selectUnidade.value;
+  if (!lojaSelecionada) return;
+
   sorteados = [];
   sorteiosFeitos = 0;
-  resultadoFinal.classList.add("hidden");
-  listaGanhadores.innerHTML = "";
-  nomeEl.innerText = "Aguardando sorteio";
+  titulo.innerText = lojaSelecionada;
+  nomeEl.innerText = "Preparando sorteio";
   numeroEl.innerText = "";
-  titulo.innerText = listaLojas[lojaAtual];
-}
+  resultadoFinal.classList.add("hidden");
+  roleta.classList.remove("hidden");
+  selectUnidade.classList.remove("hidden");
+  btn.innerText = "SORTEAR";
+  btn.disabled = false;
+});
 
+/* BOTÃO PRINCIPAL */
 btn.addEventListener("click", () => {
-  if (sorteiosFeitos >= 5) return;
+  if (!lojaSelecionada) return;
+
+  if (sorteiosFeitos === 5) {
+    resetarParaNovaUnidade();
+    return;
+  }
 
   btn.disabled = true;
+  executarSorteios();
+});
+
+/* EXECUTA OS 5 SORTEIOS AUTOMATICAMENTE */
+function executarSorteios() {
+  if (sorteiosFeitos >= 5) {
+    exibirResultadoFinal();
+    return;
+  }
+
   let contador = 0;
+  const pool = dadosPorLoja[lojaSelecionada];
 
   const animacao = setInterval(() => {
-    const pool = lojas[listaLojas[lojaAtual]];
     const temp = pool[Math.floor(Math.random() * pool.length)];
     nomeEl.innerText = formatarNome(temp.nome);
     numeroEl.innerText = temp.numero;
     contador++;
 
-    if (contador > 20) {
+    // 🔥 MAIS RÁPIDO
+    if (contador > 12) {
       clearInterval(animacao);
       finalizarSorteio();
     }
-  }, 100);
-});
+  }, 60); // velocidade da roleta
+}
 
 function finalizarSorteio() {
-  const pool = lojas[listaLojas[lojaAtual]];
+  const pool = dadosPorLoja[lojaSelecionada];
   const index = Math.floor(Math.random() * pool.length);
   const vencedor = pool.splice(index, 1)[0];
 
   sorteados.push(vencedor);
+  sorteiosFeitos++;
+
   nomeEl.innerText = formatarNome(vencedor.nome);
   numeroEl.innerText = vencedor.numero;
 
-  sorteiosFeitos++;
-  btn.disabled = false;
-
-  if (sorteiosFeitos === 5) {
-    mostrarResultado();
-  }
+  // pequeno delay entre sorteios
+  setTimeout(() => {
+    executarSorteios();
+  }, 700);
 }
 
-function mostrarResultado() {
+function exibirResultadoFinal() {
+  roleta.classList.add("hidden");
+  selectUnidade.classList.add("hidden");
   resultadoFinal.classList.remove("hidden");
+  btn.innerText = "SORTEAR OUTRA UNIDADE";
+  btn.disabled = false;
 
-  sorteados.forEach(pessoa => {
+  listaGanhadores.innerHTML = "";
+  sorteados.forEach(p => {
     const li = document.createElement("li");
-    li.innerText = `${formatarNome(pessoa.nome)} - ${pessoa.numero}`;
+    li.innerText = `${formatarNome(p.nome)} - ${p.numero}`;
     listaGanhadores.appendChild(li);
   });
+}
 
-  setTimeout(() => {
-    lojaAtual++;
-    if (lojaAtual < listaLojas.length) {
-      iniciarLoja();
-    } else {
-      titulo.innerText = "Sorteio finalizado";
-      btn.disabled = true;
-    }
-  }, 6000);
+function resetarParaNovaUnidade() {
+  lojaSelecionada = "";
+  sorteados = [];
+  sorteiosFeitos = 0;
+  selectUnidade.value = "";
+  selectUnidade.classList.remove("hidden");
+  roleta.classList.remove("hidden");
+  resultadoFinal.classList.add("hidden");
+  titulo.innerText = "";
+  nomeEl.innerText = "Aguardando sorteio";
+  numeroEl.innerText = "";
+  btn.innerText = "SORTEAR";
+  btn.disabled = true;
 }
 
 function formatarNome(nome) {
