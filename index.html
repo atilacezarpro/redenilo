@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Sorteio Oficial</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- TOPO / IMAGEM DA PROMOÇÃO -->
+    <div class="topo">
+      <img src="banner.png" alt="Promoção">
+    </div>
+
+    <!-- LOJA ATUAL -->
+    <h1 id="titulo-loja">Carregando sorteio...</h1>
+
+    <!-- ROLETA -->
+    <div class="roleta">
+      <div id="nome">Aguardando sorteio</div>
+      <div id="numero"></div>
+    </div>
+
+    <!-- BOTÃO -->
+    <button id="btnSortear">🎡 SORTEAR</button>
+
+    <!-- RESULTADO FINAL DA LOJA -->
+    <div id="resultado-final" class="hidden">
+      <h2>Ganhadores</h2>
+      <ul id="lista-ganhadores"></ul>
+    </div>
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
