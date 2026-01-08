@@ -25,14 +25,14 @@ fetch("lista.csv")
     });
 
     Object.keys(dadosPorLoja).forEach(unidade => {
-      const option = document.createElement("option");
-      option.value = unidade;
-      option.textContent = unidade;
-      selectUnidade.appendChild(option);
+      const opt = document.createElement("option");
+      opt.value = unidade;
+      opt.textContent = unidade;
+      selectUnidade.appendChild(opt);
     });
   });
 
-/* SELEÇÃO DA UNIDADE */
+/* SELEÇÃO */
 selectUnidade.addEventListener("change", () => {
   lojaSelecionada = selectUnidade.value;
   if (!lojaSelecionada) return;
@@ -44,49 +44,45 @@ selectUnidade.addEventListener("change", () => {
   numeroEl.innerText = "";
   resultadoFinal.classList.add("hidden");
   roleta.classList.remove("hidden");
-  selectUnidade.classList.remove("hidden");
   btn.innerText = "SORTEAR";
   btn.disabled = false;
 });
 
-/* BOTÃO PRINCIPAL */
+/* BOTÃO ÚNICO */
 btn.addEventListener("click", () => {
-  if (!lojaSelecionada) return;
-
   if (sorteiosFeitos === 5) {
-    resetarParaNovaUnidade();
+    resetar();
     return;
   }
 
   btn.disabled = true;
-  executarSorteios();
+  executarSorteio();
 });
 
-/* EXECUTA OS 5 SORTEIOS AUTOMATICAMENTE */
-function executarSorteios() {
+/* EXECUTA 5 SORTEIOS AUTOMÁTICOS */
+function executarSorteio() {
   if (sorteiosFeitos >= 5) {
-    exibirResultadoFinal();
+    mostrarResultado();
     return;
   }
 
-  let contador = 0;
   const pool = dadosPorLoja[lojaSelecionada];
+  let contador = 0;
 
-  const animacao = setInterval(() => {
+  const anim = setInterval(() => {
     const temp = pool[Math.floor(Math.random() * pool.length)];
     nomeEl.innerText = formatarNome(temp.nome);
     numeroEl.innerText = temp.numero;
     contador++;
 
-    // 🔥 MAIS RÁPIDO
-    if (contador > 12) {
-      clearInterval(animacao);
-      finalizarSorteio();
+    if (contador > 10) {
+      clearInterval(anim);
+      finalizar();
     }
-  }, 60); // velocidade da roleta
+  }, 50); // 🔥 rápido para live
 }
 
-function finalizarSorteio() {
+function finalizar() {
   const pool = dadosPorLoja[lojaSelecionada];
   const index = Math.floor(Math.random() * pool.length);
   const vencedor = pool.splice(index, 1)[0];
@@ -97,13 +93,10 @@ function finalizarSorteio() {
   nomeEl.innerText = formatarNome(vencedor.nome);
   numeroEl.innerText = vencedor.numero;
 
-  // pequeno delay entre sorteios
-  setTimeout(() => {
-    executarSorteios();
-  }, 700);
+  setTimeout(executarSorteio, 600);
 }
 
-function exibirResultadoFinal() {
+function mostrarResultado() {
   roleta.classList.add("hidden");
   selectUnidade.classList.add("hidden");
   resultadoFinal.classList.remove("hidden");
@@ -118,7 +111,7 @@ function exibirResultadoFinal() {
   });
 }
 
-function resetarParaNovaUnidade() {
+function resetar() {
   lojaSelecionada = "";
   sorteados = [];
   sorteiosFeitos = 0;
