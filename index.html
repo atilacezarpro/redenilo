@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Controle de Outdoors</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+body { margin:0; font-family: Arial, sans-serif; background:#f5f5f5; }
+#login, #app { display:none; }
+header { background:#222; color:#fff; padding:10px 16px; display:flex; justify-content:space-between; align-items:center; }
+button { padding:6px 12px; cursor:pointer; }
+#map { height: 70vh; }
+#tableView { padding:10px; overflow-x:auto; }
+.filter-bar{background:#fff;padding:10px;border:1px solid #ccc;margin-bottom:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.counter-bar{background:#222;color:#fff;padding:8px;margin-bottom:6px;display:flex;gap:15px;font-size:13px}
+table { border-collapse: collapse; width:100%; background:#fff; }
+th, td { border:1px solid #ccc; padding:6px; font-size:13px; }
+th { background:#eee; cursor:pointer }
+input, select { padding:4px; width:100% }
+.tabs { display:flex; gap:10px; padding:10px; }
+.tabs button { padding:8px 14px; }
+#formPopup { width:260px; }
+.login-box { max-width:320px; margin:80px auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.1); }
+.login-box input { margin-bottom:10px; width:100%; }
+.status-green { color:green; font-weight:bold; }
+.status-yellow { color:orange; font-weight:bold; }
+.status-red { color:red; font-weight:bold; }
+</style>
+</head>
+<body>
+<div id="login">
+  <div class="login-box">
+    <h3>Login</h3>
+    <input id="user" placeholder="Usuário" />
+    <input id="pass" placeholder="Senha" type="password" />
+    <button onclick="login()">Entrar</button>
+    <p id="loginError" style="color:red"></p>
+  </div>
+</div>
+
+<div id="app">
+<header>
+  <div>Controle de Outdoors</div>
+  <button onclick="logout()">Sair</button>
+</header>
+
+<div class="tabs">
+  <button onclick="showMap()">Mapa</button>
+  <button onclick="showTable()">Lista</button>
+</div>
+
+<div id="map"></div>
+
+<div id="tableView" style="display:none">
+  <div class="counter-bar" id="counters"></div>
+  <div class="filter-bar">
+    <div>Busca:<br><input id="filterText" placeholder="Endereço ou referência" oninput="applyFilters()"></div>
+    <div>Fornecedor:<br><select id="filterFornecedor" onchange="applyFilters()"></select></div>
+    <div>Status:<br><select id="filterStatus" onchange="applyFilters()">
+      <option value="">Todos</option><option value="green">Ativo</option><option value="yellow">Próximo</option><option value="red">Vencido</option></select></div>
+    <div>Início >=<br><input type="date" id="filterStart" onchange="applyFilters()"></div>
+    <div>Fim <=<br><input type="date" id="filterEnd" onchange="applyFilters()"></div>
+    <div>Ordenar por:<br><select id="sortBy" onchange="applyFilters()">
+      <option value="">Padrão</option><option value="forn">Fornecedor</option><option value="start">Data início</option><option value="end">Data fim</option></select></div>
+    <div style="align-self:end"><button onclick="clearFilters()">Limpar filtros</button></div>
+  </div>
+  <div id="tableContainer"></div>
+</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const API_URL = "COLE_AQUI_SUA_URL_DO_APPS_SCRIPT";
+let useRemote=false;
+
+let users=[{u:'admin',p:'1234'}];
+fetch('users.csv').then(r=>r.ok?r.text():null).then(t=>{if(!t)return;users=[];t.split(/\r?\n/).forEach(l=>{const[a,b]=l.split(',');if(a&&b)users.push({u:a.trim(),p:b.trim()});});});
+
+function login(){const ok=users.find(x=>x.u===user.value&&x.p===pass.value);if(ok){localStorage.setItem('logged','1');init();}else loginError.innerText='Usuário ou senha inválidos';}
+function logout(){localStorage.removeItem('logged');location.reload();}
+
+let data=[];
+async function loadData(){if(API_URL.startsWith('http')){try{const r=await fetch(API_URL);data=await r.json();useRemote=true;}catch(e){data=JSON.parse(localStorage.getItem('outdoors')||'[]');}}else data=JSON.parse(localStorage.getItem('outdoors')||'[]');}
+async function saveData(){if(useRemote)await fetch(API_URL,{method:'POST',body:JSON.stringify(data)});else localStorage.setItem('outdoors',JSON.stringify(data));}
+
+let mapObj,markers=[];
+async function init(){
+ login.style.display='none';app.style.display='block';showMap();
+ await loadData();
+ mapObj=L.map('map').setView([-15.89,-52.256],13);
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapObj);
+ mapObj.on('click',e=>openForm(null,e.latlng));
+ buildFornecedorFilter();renderAll();
+}
+
+function getStatus(i){const d=(new Date(i.end)-new Date())/86400000;if(d<0)return'red';if(d<=5)return'yellow';return'green';}
+
+function filteredData(){
+ let arr=[...data];const t=filterText.value.toLowerCase(),f=filterFornecedor.value,s=filterStatus.value,ds=filterStart.value,de=filterEnd.value;
+ arr=arr.filter(i=>{
+  if(t && !(i.addr||'').toLowerCase().includes(t) && !(i.ref||'').toLowerCase().includes(t))return false;
+  if(f && i.forn!==f)return false;
+  if(s && getStatus(i)!==s)return false;
+  if(ds && i.start<ds)return false;
+  if(de && i.end>de)return false;
+  return true;
+ });
+ if(sortBy.value)arr.sort((a,b)=>(a[sortBy.value]||'').localeCompare(b[sortBy.value]||''));
+ return arr;
+}
+
+function renderAll(){renderMarkers();renderTable();updateCounters();}
+
+function renderMarkers(){
+ markers.forEach(m=>mapObj.removeLayer(m));markers=[];
+ filteredData().forEach(i=>{
+  const c=getStatus(i);
+  const ic=L.divIcon({className:'',html:`<div style="background:${c};width:14px;height:14px;border-radius:50%"></div>`});
+  const m=L.marker([i.lat,i.lng],{icon:ic}).addTo(mapObj);
+  m.on('click',()=>openForm(data.indexOf(i)));
+  markers.push(m);
+ });
+}
+
+function openForm(index,latlng){
+ let i=index!=null?data[index]:{lat:latlng.lat,lng:latlng.lng};
+ const h=`<div id=formPopup>
+ <label>Referência<input id=f_ref value="${i.ref||''}"></label>
+ <label>Endereço<input id=f_addr value="${i.addr||''}"></label>
+ <label>Fornecedor<input id=f_forn value="${i.forn||''}"></label>
+ <label>Contato<input id=f_cont value="${i.cont||''}"></label>
+ <label>Início<input type=date id=f_ini value="${i.start||''}"></label>
+ <label>Fim<input type=date id=f_end value="${i.end||''}"></label>
+ <label>Arte URL<input id=f_art value="${i.art||''}"></label>
+ <label>Pasta URL<input id=f_link value="${i.link||''}"></label><br><br>
+ <button onclick="saveForm(${index})">Salvar</button>
+ <button onclick="clearForm()">Limpar</button></div>`;
+ L.popup().setLatLng(index!=null?[i.lat,i.lng]:[latlng.lat,latlng.lng]).setContent(h).openOn(mapObj);
+}
+
+async function saveForm(index){
+ const o={ref:f_ref.value,addr:f_addr.value,forn:f_forn.value,cont:f_cont.value,start:f_ini.value,end:f_end.value,art:f_art.value,link:f_link.value,lat:mapObj._popup._latlng.lat,lng:mapObj._popup._latlng.lng};
+ if(index!=null)data[index]=o;else data.push(o);
+ await saveData();mapObj.closePopup();buildFornecedorFilter();renderAll();
+}
+function clearForm(){document.querySelectorAll('#formPopup input').forEach(i=>i.value='');}
+
+function buildFornecedorFilter(){
+ const arr=[...new Set(data.map(d=>d.forn).filter(Boolean))].sort();
+ filterFornecedor.innerHTML='<option value="">Todos</option>'+arr.map(f=>`<option>${f}</option>`).join('');
+}
+function applyFilters(){renderAll();}
+function clearFilters(){filterText.value='';filterFornecedor.value='';filterStatus.value='';filterStart.value='';filterEnd.value='';sortBy.value='';renderAll();}
+
+function updateCounters(){
+ let g=0,y=0,r=0;data.forEach(i=>{const s=getStatus(i);if(s==='green')g++;else if(s==='yellow')y++;else r++;});
+ counters.innerHTML=`Ativos: ${g} | Próx. venc.: ${y} | Vencidos: ${r} | Total: ${data.length}`;
+}
+
+function renderTable(){
+ let h='<table><tr><th>Ref</th><th>Endereço</th><th>Fornecedor</th><th>Contato</th><th>Início</th><th>Fim</th><th>Status</th></tr>';
+ filteredData().forEach(i=>{
+  const s=getStatus(i),idx=data.indexOf(i);
+  h+=`<tr onclick="editFromTable(${idx})"><td>${i.ref||''}</td><td>${i.addr||''}</td><td>${i.forn||''}</td><td>${i.cont||''}</td><td>${i.start||''}</td><td>${i.end||''}</td><td class=status-${s}>${s}</td></tr>`;
+ });
+ tableContainer.innerHTML=h+'</table>';
+}
+
+function editFromTable(i){showMap();mapObj.setView([data[i].lat,data[i].lng],16);openForm(i);}
+function showMap(){map.style.display='block';tableView.style.display='none';}
+function showTable(){map.style.display='none';tableView.style.display='block';}
+
+if(localStorage.getItem('logged'))init();else login.style.display='block';
+</script>
+</body>
+</html>
